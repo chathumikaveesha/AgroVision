@@ -1,0 +1,62 @@
+@startuml sequence_diagram_diagnosis_outbreak
+autonumber
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "🧑‍🌾 Smallholder Farmer" as Farmer
+participant "📱 Flutter Mobile UI\n(Scan / History Screen)" as UI
+participant "⚙️ Riverpod Provider\n(DiagnosisStateNotifier)" as Provider
+participant "🧠 TFLite Classifier\n(On-Device Inference)" as Classifier
+participant "📦 DiagnosisRepository\n(Real / Fake Provider)" as Repo
+database "Local SQLite/Cache\n(Offline Persistence)" as LocalStore
+database "Firebase Cloud Storage" as Storage
+database "Cloud Firestore\n(diagnoses collection)" as Firestore
+control "⚡ Cloud Function:\nonDiagnosisCreated" as FnDiagnosis
+control "⚡ Cloud Function:\nonOutbreakAlertCreated" as FnOutbreak
+queue "🔔 Firebase Cloud Messaging\n(FCM Service)" as FCM
+actor "🧑‍🌾 Neighboring Farmers\n(Within Outbreak Radius)" as Neighbor
+
+== Phase 1: Edge Diagnosis (Fully Offline) ==
+Farmer -> UI : Point camera at crop leaf & press 'Scan'
+UI -> Provider : diagnoseImage(File imageFile)
+Provider -> Classifier : runInference(imageBytes)
+note over Classifier : Quantized MobileNet/EfficientNet\nExecutes on-device (zero latency, zero data cost)
+Classifier --> Provider : DiagnosisResult(predictedClass, confidenceScore)
+Provider --> UI : Render diagnosis result, preventive advice & treatment guide
+
+== Phase 2: Save & Cloud Synchronization ==
+Farmer -> UI : Confirm and tap 'Save to History'
+UI -> Provider : saveDiagnosis()
+Provider -> Repo : createDiagnosis(diagnosisEntity)
+Repo -> LocalStore : Write record locally (instant UI update)
+
+alt Device is Online
+    Repo -> Storage : Upload compressed leaf image
+    Storage --> Repo : Return storage imageUrl
+    Repo -> Firestore : Write document to /diagnoses\n{userId, cropId, predictedClass, confidence, location, geohash, timestamp}
+    Firestore --> Repo : Document creation confirmed
+else Device is Offline
+    note over Repo, LocalStore : Stored locally; Firestore SDK automatically syncs\nwhen connectivity resumes
+end
+
+== Phase 3: Outbreak Cluster Detection ==
+Firestore -> FnDiagnosis : Event trigger onCreate(/diagnoses/{diagnosisId})
+note over FnDiagnosis : Reads OUTBREAK_RADIUS_KM (e.g. 10km),\nOUTBREAK_MIN_REPORTS (e.g. 5),\nOUTBREAK_WINDOW_HOURS (e.g. 48h)
+FnDiagnosis -> Firestore : Query diagnoses with same diseaseType within geohash cluster
+Firestore --> FnDiagnosis : List of diagnosis timestamps & coordinates
+
+alt Cluster count >= OUTBREAK_MIN_REPORTS
+    FnDiagnosis -> FnDiagnosis : Compute obfuscated cluster centroid\n(Preserve farmer anonymity)
+    FnDiagnosis -> Firestore : Write new doc to /outbreakAlerts\n{diseaseType, centerPoint, radiusKm, reportCount, preventiveSteps}
+    
+    Firestore -> FnOutbreak : Event trigger onCreate(/outbreakAlerts/{alertId})
+    FnOutbreak -> Firestore : Find users within alert radius with active fcmToken
+    Firestore --> FnOutbreak : Matching user tokens
+    FnOutbreak -> Firestore : Batch write individual user /notifications
+    FnOutbreak -> FCM : Send multicast FCM notification message
+    FCM -> Neighbor : Push Notification: "Early Blight Outbreak detected within 10 km!"
+else Cluster count < OUTBREAK_MIN_REPORTS
+    note over FnDiagnosis : Cluster threshold not met; no alert triggered.
+end
+
+@enduml

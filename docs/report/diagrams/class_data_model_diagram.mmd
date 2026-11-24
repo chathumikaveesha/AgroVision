@@ -1,0 +1,106 @@
+```mermaid
+classDiagram
+    direction TB
+
+    class User {
+        +String uid
+        +String email
+        +String fullName
+        +GeoPoint location
+        +String region
+        +String soilType
+        +double landSize
+        +String fcmToken
+        +DateTime createdAt
+    }
+
+    class CropProfile {
+        +String cropId
+        +String userId
+        +String name
+        +String cropType
+        +DateTime plantedDate
+        +String soilType
+        +String growthStage
+        +double areaSize
+    }
+
+    class Diagnosis {
+        +String diagnosisId
+        +String userId
+        +String cropId
+        +String imageUrl
+        +String predictedClass
+        +double confidenceScore
+        +GeoPoint location
+        +String geohash
+        +DateTime diagnosedAt
+    }
+
+    class PlantingRecommendation {
+        +String recId
+        +String userId
+        +String soilType
+        +String season
+        +GeoPoint location
+        +List~String~ recommendedCrops
+        +DateTime generatedAt
+    }
+
+    class IrrigationSchedule {
+        +String scheduleId
+        +String cropId
+        +String userId
+        +List~WeeklyPlanItem~ weeklyPlan
+        +Map weatherSnapshot
+        +DateTime generatedAt
+    }
+
+    class WeatherCache {
+        +String cacheId
+        +String regionKey
+        +Map forecastJson
+        +DateTime fetchedAt
+        +DateTime expiresAt
+    }
+
+    class OutbreakAlert {
+        +String alertId
+        +String diseaseType
+        +GeoPoint centerPoint
+        +double radiusKm
+        +int reportCount
+        +List~String~ preventiveSteps
+        +DateTime createdAt
+    }
+
+    class AppNotification {
+        +String notificationId
+        +String userId
+        +String alertId
+        +String title
+        +String body
+        +DateTime sentAt
+        +String deliveryStatus
+    }
+
+    class DecisionLog {
+        +String id
+        +String userId
+        +DateTime date
+        +String title
+        +String detail
+        +String resultLabel
+    }
+
+    User "1" -- "0..*" CropProfile : manages >
+    User "1" -- "0..*" Diagnosis : records >
+    CropProfile "1" -- "0..*" Diagnosis : references <
+    User "1" -- "0..*" PlantingRecommendation : receives >
+    User "1" -- "0..*" IrrigationSchedule : receives >
+    CropProfile "1" -- "0..*" IrrigationSchedule : applies to <
+    User "1" -- "0..*" AppNotification : receives >
+    OutbreakAlert "1" -- "0..*" AppNotification : triggers >
+    User "1" -- "0..*" DecisionLog : logs >
+    Diagnosis "1..*" ..> OutbreakAlert : aggregated into (privacy-preserving) >
+```

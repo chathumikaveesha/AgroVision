@@ -1,0 +1,129 @@
+@startuml class_data_model_diagram
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide circle
+
+entity "users" as User {
+  * uid : String <<PK, Auth UID>>
+  --
+  * email : String
+  * fullName : String
+  * location : GeoPoint
+  * region : String
+  * soilType : String
+  * landSize : double
+  fcmToken : String
+  * createdAt : DateTime
+}
+
+entity "cropProfiles" as CropProfile {
+  * cropId : String <<PK>>
+  --
+  * userId : String <<FK>>
+  * name : String
+  * cropType : String (Tomato, Brinjal, Chilli, Potato)
+  * plantedDate : DateTime
+  * soilType : String
+  * growthStage : String
+  * areaSize : double
+}
+
+entity "diagnoses" as Diagnosis {
+  * diagnosisId : String <<PK>>
+  --
+  * userId : String <<FK>>
+  cropId : String <<FK, nullable>>
+  * imageUrl : String
+  * predictedClass : String
+  * confidenceScore : double
+  * location : GeoPoint
+  * geohash : String
+  * diagnosedAt : DateTime
+}
+
+entity "plantingRecommendations" as PlantingRecommendation {
+  * recId : String <<PK>>
+  --
+  * userId : String <<FK>>
+  * soilType : String
+  * season : String (Maha, Yala)
+  * location : GeoPoint
+  * recommendedCrops : List<String>
+  * generatedAt : DateTime
+}
+
+entity "irrigationSchedules" as IrrigationSchedule {
+  * scheduleId : String <<PK>>
+  --
+  * cropId : String <<FK>>
+  * userId : String <<FK>>
+  * weeklyPlan : List<Map>
+  * weatherSnapshot : Map
+  * generatedAt : DateTime
+}
+
+entity "weatherCache" as WeatherCache {
+  * cacheId : String <<PK, regionKey>>
+  --
+  * regionKey : String
+  * forecastJson : Map
+  * fetchedAt : DateTime
+  * expiresAt : DateTime
+}
+
+entity "outbreakAlerts" as OutbreakAlert {
+  * alertId : String <<PK>>
+  --
+  * diseaseType : String
+  * centerPoint : GeoPoint <<rounded / obfuscated>>
+  * radiusKm : double
+  * reportCount : int
+  * preventiveSteps : List<String>
+  * createdAt : DateTime
+}
+
+entity "notifications" as Notification {
+  * notificationId : String <<PK>>
+  --
+  * userId : String <<FK>>
+  * alertId : String <<FK>>
+  * title : String
+  * body : String
+  * sentAt : DateTime
+  * deliveryStatus : String (delivered, pending)
+}
+
+entity "decisionLogs" as DecisionLog {
+  * id : String <<PK>>
+  --
+  * userId : String <<FK>>
+  * date : DateTime
+  * title : String
+  * detail : String
+  * resultLabel : String
+}
+
+User ||--o{ CropProfile : "owns"
+User ||--o{ Diagnosis : "submits"
+CropProfile ||--o{ Diagnosis : "associated with"
+User ||--o{ PlantingRecommendation : "receives"
+User ||--o{ IrrigationSchedule : "receives"
+CropProfile ||--o{ IrrigationSchedule : "scheduled for"
+User ||--o{ Notification : "targeted to"
+OutbreakAlert ||--o{ Notification : "causes"
+User ||--o{ DecisionLog : "records (spec addition)"
+
+note bottom of OutbreakAlert
+  **Privacy Preservation Rule:**
+  Outbreak alerts store only rounded center points,
+  aggregate counts, and general prevention steps.
+  Farmer UIDs and precise GPS coordinates are strictly excluded.
+end note
+
+note bottom of DecisionLog
+  **Specification Addition:**
+  Added specifically for the History screen Decisions tab
+  to log farmer actions, advisory outcomes, and intervention results.
+end note
+
+@enduml

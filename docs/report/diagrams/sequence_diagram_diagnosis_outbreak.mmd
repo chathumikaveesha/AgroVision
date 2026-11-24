@@ -1,0 +1,57 @@
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Farmer as 🧑‍🌾 Farmer
+    participant UI as 📱 AgroVision UI
+    participant Riverpod as ⚙️ State Provider
+    participant Classifier as 🧠 TFLite Classifier<br/>(Edge ML)
+    participant Repo as 📦 DiagnosisRepository
+    participant Storage as 📁 Cloud Storage
+    participant Firestore as 🗄️ Cloud Firestore
+    participant CloudFn as ⚡ Cloud Functions<br/>(onDiagnosisCreated)
+    participant FCMFn as ⚡ Cloud Functions<br/>(onOutbreakAlertCreated)
+    participant FCM as 🔔 FCM Service
+    actor Neighbor as 🧑‍🌾 Neighboring Farmers
+
+    Note over Farmer, Classifier: Phase 1: Edge Diagnosis (100% Offline Capable)
+    Farmer->>UI: Snap leaf photo & tap 'Diagnose'
+    UI->>Riverpod: Request classification(imagePath)
+    Riverpod->>Classifier: classifyImage(imagePath)
+    Classifier->>Classifier: Preprocess tensor & run quantized inference
+    Classifier-->>Riverpod: Return predictedClass & confidenceScore
+    Riverpod-->>UI: Display diagnosis, severity & treatment advice
+
+    Note over Farmer, Firestore: Phase 2: Save Diagnosis (Local + Cloud Sync)
+    Farmer->>UI: Tap 'Save Diagnosis to History'
+    UI->>Repo: saveDiagnosis(diagnosisData, imageFile)
+    Repo->>Repo: Store in local offline cache (immediate UI feedback)
+    
+    alt Online Connection Available
+        Repo->>Storage: Upload compressed leaf image
+        Storage-->>Repo: Return secure download imageUrl
+        Repo->>Firestore: Create document in 'diagnoses' collection<br/>(predictedClass, geohash, location, timestamp)
+        Firestore-->>Repo: Acknowledge document write
+    else Offline Mode
+        Repo-->>UI: Keep in pending sync queue; syncs automatically when online
+    end
+    Repo-->>UI: Confirm saved to History
+
+    Note over Firestore, Neighbor: Phase 3: Outbreak Detection & Privacy-Preserving Alert
+    Firestore->>CloudFn: Trigger onDiagnosisCreated(newDocSnapshot)
+    CloudFn->>CloudFn: Read outbreak thresholds (radius: 10km, minReports: 5, window: 48h)
+    CloudFn->>Firestore: Query recent diagnoses with matching disease & geohash neighbors
+    
+    alt Threshold Exceeded (Cluster Confirmed)
+        CloudFn->>CloudFn: Calculate rounded centroid (GeoPoint obfuscation)
+        CloudFn->>Firestore: Create document in 'outbreakAlerts'<br/>(diseaseType, centerPoint, radiusKm, reportCount)
+        Firestore-->>CloudFn: Created alertId
+        
+        Firestore->>FCMFn: Trigger onOutbreakAlertCreated(newAlertSnapshot)
+        FCMFn->>Firestore: Query affected users within radius (fcmTokens)
+        FCMFn->>Firestore: Create individual 'notifications' records
+        FCMFn->>FCM: Dispatch multicast FCM push payload<br/>(Privacy-safe: no victim names or exact coords)
+        FCM-->>Neighbor: Deliver Outbreak Push Alert notification
+    else Below Threshold
+        CloudFn->>CloudFn: Log cluster count; no alert required yet
+    end
+```

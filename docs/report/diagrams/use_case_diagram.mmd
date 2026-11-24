@@ -1,0 +1,65 @@
+```mermaid
+flowchart TD
+    %% Actors
+    Farmer(("🧑‍🌾 Farmer\n(Smallholder)"))
+    Gardener(("🌱 Home Gardener\n(Nightshade)"))
+    Coop(("🏢 Agricultural Cooperative\n(Future Extension / Outside Boundary)")):::future
+
+    subgraph AgroVision ["🌾 AgroVision System Boundary"]
+        subgraph AuthProfile ["Authentication & Profile"]
+            UC_Reg(["Register & Login\n(Email/Password)"])
+            UC_Profile(["Manage Farm Profile\n(Location, Soil, Land Size)"])
+        end
+
+        subgraph DiagnosisScan ["Crop Disease Diagnosis (Offline First)"]
+            UC_Capture(["Capture / Upload Leaf Photo\n(Tomato, Brinjal, Chilli, Potato)"])
+            UC_Infer(["On-Device ML Inference\n(TFLite Quantized Classifier)"])
+            UC_ViewResult(["View Diagnosis Result &\nTreatment Recommendations"])
+            UC_SaveHistory(["Save Diagnosis to History\n(Local Cache & Cloud Sync)"])
+        end
+
+        subgraph AdvisoryPlanning ["Crop & Advisory Services"]
+            UC_Weather(["View Weather Forecast &\nAgro-Advisory"])
+            UC_PlantingPlan(["Generate Seasonal Crop\nPlanting Recommendations"])
+            UC_Irrigation(["Generate Smart Weekly\nIrrigation Schedule"])
+        end
+
+        subgraph OutbreakSurveillance ["Community Outbreak Surveillance"]
+            UC_TriggerAlert(["Automatic Outbreak Detection\n(Geo-clustering Cloud Trigger)"])
+            UC_ReceiveAlert(["Receive Outbreak Push Alert\n(FCM Notification & Radius Map)"])
+        end
+
+        subgraph HistoryDecisions ["History & Farm Decision Logs"]
+            UC_ViewHistory(["Browse Diagnosis History"])
+            UC_DecisionLog(["View Decision Logs &\nResult Actions"])
+        end
+    end
+
+    %% Use Case relationships
+    Farmer --> UC_Reg
+    Farmer --> UC_Profile
+    Farmer --> UC_Capture
+    Farmer --> UC_Weather
+    Farmer --> UC_PlantingPlan
+    Farmer --> UC_Irrigation
+    Farmer --> UC_ReceiveAlert
+    Farmer --> UC_ViewHistory
+    Farmer --> UC_DecisionLog
+
+    Gardener --> UC_Reg
+    Gardener --> UC_Capture
+    Gardener --> UC_Weather
+    Gardener --> UC_ReceiveAlert
+    Gardener --> UC_ViewHistory
+
+    UC_Capture --> UC_Infer
+    UC_Infer --> UC_ViewResult
+    UC_ViewResult --> UC_SaveHistory
+    UC_SaveHistory -.->|triggers| UC_TriggerAlert
+    UC_TriggerAlert -.->|delivers| UC_ReceiveAlert
+
+    %% Future Boundary interactions
+    Coop -.-|Future Aggregated Analytics\n& Bulk Advisory| AgroVision
+
+    classDef future fill:#f9f9f9,stroke:#999,stroke-dasharray: 5 5,color:#666;
+```

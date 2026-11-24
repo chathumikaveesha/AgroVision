@@ -1,0 +1,79 @@
+@startuml deployment_architecture_diagram
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+node "Farmer's Smartphone\n<<Mobile Device - Android/iOS>>" as MobileNode {
+    artifact "Quantized TFLite Model\n(model.tflite & labels.txt)" as ModelArtifact
+    
+    component "AgroVision Mobile App\n<<Flutter Application>>" as FlutterApp {
+        package "UI & State" {
+            [Presentation Screens] as UI
+            [Riverpod Providers] as Providers
+        }
+        package "Core & Business Logic" {
+            [Repository Interfaces] as RepoInterfaces
+            [Domain Entities] as Entities
+        }
+        package "Data & Edge ML" {
+            [Real Repositories\n(Firestore & Storage)] as RealRepos
+            [Fake Repositories\n(USE_FAKES flag)] as FakeRepos
+            [TFLite Classifier Engine] as MLClassifier
+        }
+        database "Local Persistence\n(Firestore Offline Cache)" as LocalCache
+    }
+}
+
+cloud "Firebase Cloud Platform\n<<Google Cloud / Firebase>>" as FirebaseCloud {
+    node "Identity & Security" {
+        [Firebase Authentication\n(Email/Password, Tokens)] as FirebaseAuth
+    }
+    
+    node "Data Storage" {
+        database "Cloud Firestore\n(NoSQL Document Collections)" as Firestore
+        storage "Firebase Cloud Storage\n(Diagnosis Leaf Images)" as CloudStorage
+    }
+    
+    node "Serverless Compute\n<<Cloud Functions (Node 20, TypeScript)>>" as Functions {
+        [getWeatherForecast\n(HTTPS Callable)] as FnWeather
+        [refreshWeatherCache\n(Pub/Sub Hourly Cron)] as FnWeatherCron
+        [onDiagnosisCreated\n(Firestore Trigger)] as FnDiagnosisTrigger
+        [onOutbreakAlertCreated\n(Firestore Trigger)] as FnOutbreakTrigger
+    }
+    
+    node "Messaging" {
+        [Firebase Cloud Messaging (FCM)\n(Push Notifications)] as FCM
+    }
+}
+
+cloud "Third-Party External Services" as ExternalCloud {
+    [OpenWeatherMap API\n(Weather Forecasts)] as OpenWeatherMap
+}
+
+UI --> Providers
+Providers --> RepoInterfaces
+RepoInterfaces <|.. RealRepos
+RepoInterfaces <|.. FakeRepos
+Providers --> MLClassifier
+MLClassifier ..> ModelArtifact : loads & infers locally
+RealRepos --> LocalCache : offline sync
+
+RealRepos --> FirebaseAuth : auth check
+RealRepos --> CloudStorage : uploads leaf image
+RealRepos --> Firestore : read/write documents
+RealRepos --> FnWeather : callable request
+
+FnWeather --> Firestore : check weatherCache
+FnWeather --> OpenWeatherMap : fetch on miss (OPENWEATHER_API_KEY)
+FnWeatherCron --> OpenWeatherMap : periodic fetch
+FnWeatherCron --> Firestore : update weatherCache
+
+Firestore --> FnDiagnosisTrigger : onWrite (new diagnosis)
+FnDiagnosisTrigger --> Firestore : query nearby geohash &\nwrite outbreakAlerts
+Firestore --> FnOutbreakTrigger : onCreate (outbreakAlert)
+FnOutbreakTrigger --> FCM : send multicast alert
+FnOutbreakTrigger --> Firestore : record notifications
+
+FCM ..> FlutterApp : deliver background/foreground push alert
+
+@enduml

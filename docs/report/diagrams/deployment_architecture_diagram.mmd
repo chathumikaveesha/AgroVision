@@ -1,0 +1,66 @@
+```mermaid
+flowchart TB
+    subgraph MobileDevice ["📱 Android / iOS Mobile Device (Farmer Edge Client)"]
+        subgraph FlutterApp ["Flutter Mobile Application (AgroVision)"]
+            PresentationLayer["Presentation Layer (Screens, Widgets, Theme)"]
+            StateManagement["State Management & DI (Riverpod Providers)"]
+            DomainLayer["Domain Layer (Entities, Use Cases, Interfaces)"]
+            DataLayer["Data Layer (Repositories: Fakes & Real Implementations)"]
+            OfflineCache["Offline Cache & Local SQLite / Hive"]
+        end
+
+        subgraph EdgeInference ["On-Device Machine Learning"]
+            TFLiteInterpreter["TensorFlow Lite Interpreter (diagnosisClassifierProvider)"]
+            TFLiteModel["Quantized Model (model.tflite & labels.txt)"]
+        end
+
+        PresentationLayer --> StateManagement
+        StateManagement --> DomainLayer
+        DomainLayer --> DataLayer
+        DataLayer --> OfflineCache
+        DomainLayer --> EdgeInference
+        EdgeInference --> TFLiteInterpreter
+        TFLiteInterpreter --> TFLiteModel
+    end
+
+    subgraph FirebaseCloud ["☁️ Firebase Backend Ecosystem (agrovision-dev / agrovision-prod)"]
+        FirebaseAuth["🔐 Firebase Authentication\n(Email & Password Credentials)"]
+        
+        CloudStorage["📁 Cloud Storage for Firebase\n(Compressed Diagnosis Leaf Images)"]
+        
+        FirestoreDB[("🗄️ Cloud Firestore (NoSQL Document Store)\n- users\n- cropProfiles\n- diagnoses\n- plantingRecommendations\n- irrigationSchedules\n- weatherCache\n- outbreakAlerts\n- notifications\n- decisionLogs")]
+        
+        subgraph CloudFunctionsEnv ["⚡ Cloud Functions for Firebase (TypeScript, Node 20)"]
+            FnWeatherCallable["getWeatherForecast (HTTPS Callable)"]
+            FnWeatherCron["refreshWeatherCache (Scheduled Hourly Cron)"]
+            FnOnDiag["onDiagnosisCreated (Firestore Event Trigger)"]
+            FnOnOutbreak["onOutbreakAlertCreated (Firestore Event Trigger)"]
+        end
+
+        FCMService["🔔 Firebase Cloud Messaging (FCM)\n(Push Notification Delivery)"]
+    end
+
+    subgraph ExternalServices ["🌐 External Cloud APIs"]
+        OWM["🌦️ OpenWeatherMap API\n(Forecasts & Weather Metrics)"]
+    end
+
+    %% Client to Firebase interactions
+    FlutterApp <-->|Auth Tokens & State| FirebaseAuth
+    FlutterApp -->|Image Uploads (HTTPS)| CloudStorage
+    FlutterApp <-->|Realtime Streams & Offline Sync| FirestoreDB
+    FlutterApp -->|Direct Invocations| FnWeatherCallable
+    FlutterApp <-->|Token Registration & Push Receiver| FCMService
+
+    %% Internal Cloud Functions interactions
+    FnWeatherCallable --> FirestoreDB
+    FnWeatherCron -->|Store Cache| FirestoreDB
+    FnWeatherCron -->|Fetch Forecast| OWM
+    FnWeatherCallable -->|Fetch on Cache Miss| OWM
+
+    FirestoreDB -->|Document Write Trigger| FnOnDiag
+    FnOnDiag -->|Evaluate Geo-Cluster & Create Alert| FirestoreDB
+    
+    FirestoreDB -->|Alert Created Trigger| FnOnOutbreak
+    FnOnOutbreak -->|Build & Dispatch Notifications| FCMService
+    FnOnOutbreak -->|Write notification docs| FirestoreDB
+```

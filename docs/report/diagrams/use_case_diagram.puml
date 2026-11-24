@@ -1,0 +1,65 @@
+@startuml use_case_diagram
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam actorStyle awesome
+
+actor "🧑‍🌾 Smallholder Farmer" as Farmer
+actor "🌱 Home Gardener" as Gardener
+actor "🏢 Agricultural Cooperative\n(External / Future Scope)" as Coop <<Future>>
+
+rectangle "AgroVision System Boundary" {
+    package "Authentication & Farm Profile" {
+        usecase "Register & Authenticate\n(Firebase Auth)" as UC_Auth
+        usecase "Manage Farm Profile\n(Soil, Location, Size)" as UC_Profile
+    }
+
+    package "Crop Disease Diagnosis (Offline-First)" {
+        usecase "Capture Leaf Image\n(Nightshade Crops)" as UC_Capture
+        usecase "Run Edge ML Inference\n(On-Device TFLite)" as UC_Infer
+        usecase "View Diagnosis & Treatment" as UC_Result
+        usecase "Save & Sync Diagnosis" as UC_Save
+    }
+
+    package "Smart Advisory & Climate Planning" {
+        usecase "View Hyper-Local Weather\n& Agro-Advisories" as UC_Weather
+        usecase "Get Seasonal Crop Recommendations" as UC_Plan
+        usecase "Generate Weekly Irrigation Schedule" as UC_Irrigate
+    }
+
+    package "Community Disease Surveillance" {
+        usecase "Trigger Outbreak Alert\n(Density Clustering)" as UC_OutbreakTrigger
+        usecase "Receive FCM Outbreak Alert\n(Privacy-Preserving Radius)" as UC_AlertReceive
+    }
+
+    package "Farm Records & Decision Logs" {
+        usecase "Review Diagnosis History" as UC_History
+        usecase "Track Decision Logs\n(Decisions Tab Addition)" as UC_DecisionLog
+    }
+}
+
+Farmer --> UC_Auth
+Farmer --> UC_Profile
+Farmer --> UC_Capture
+Farmer --> UC_Weather
+Farmer --> UC_Plan
+Farmer --> UC_Irrigate
+Farmer --> UC_AlertReceive
+Farmer --> UC_History
+Farmer --> UC_DecisionLog
+
+Gardener --> UC_Auth
+Gardener --> UC_Capture
+Gardener --> UC_Weather
+Gardener --> UC_AlertReceive
+Gardener --> UC_History
+
+UC_Capture .> UC_Infer : <<include>>
+UC_Infer .> UC_Result : <<include>>
+UC_Result .> UC_Save : <<include>>
+UC_Save ..> UC_OutbreakTrigger : <<trigger via Cloud Function>>
+UC_OutbreakTrigger ..> UC_AlertReceive : <<notifies>>
+
+Coop ..> (AgroVision System Boundary) : <<future aggregated insights>>
+
+@enduml
